@@ -1,0 +1,8 @@
+# Python bytecode files
+__pycache__/
+
+# environment file
+.env
+
+# MACOSX system files
+.DS_Store
