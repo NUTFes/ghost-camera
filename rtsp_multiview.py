@@ -5,12 +5,12 @@ import numpy as np
 # OpenCVのFFmpegにRTSPをTCPで掴ませる（不安定ならstimeoutも調整）
 os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp|stimeout;5000000|buffer_size;1048576"
 
-URLS = [
-    "rtsp://100.65.191.110:8554/stream",  # ラズパイの実際のIPアドレスに変更
-    # "rtsp://172.30.1.5:8554/stream",  # ラズパイの実際のIPアドレスに変更
-    # "rtsp://pi2.local:8554/stream",
-    # "rtsp://pi3.local:8554/stream",
-]
+# 表示したい名前とURLを辞書形式で対応させる
+STREAMS = {
+    "PiCam 2 (210)": "rtsp://100.121.246.91:8554/stream",
+    "PiCam 3 (208)": "rtsp://100.125.68.79:8554/stream",  # 2台目のIPアドレス
+    "PiCam 4 (1F)": "rtsp://100.108.196.44:8554/stream",     # 3台目のIPアドレス
+}
 
 TARGET_W, TARGET_H = 640, 360   # 各映像の表示サイズ（軽量）
 
@@ -20,20 +20,32 @@ def open_cap(url):
     cap.set(cv2.CAP_PROP_FPS, 15)
     return cap
 
-caps = [open_cap(u) for u in URLS]
-last_ok = [False]*len(URLS)
+caps = [open_cap(url) for url in STREAMS.values()]
+last_ok = [False]*len(STREAMS)
 
 while True:
     frames = []
-    for i, (u, cap) in enumerate(zip(URLS, caps)):
+    # 辞書のキー(name)と値(url)、そしてcapオブジェクトを同時にループさせる
+    for i, ((name, url), cap) in enumerate(zip(STREAMS.items(), caps)):
         ok, frame = cap.read()
         if not ok or frame is None:
             # 再接続
             cap.release()
             time.sleep(0.5)
-            caps[i] = open_cap(u)
-            frames.append(np.zeros((TARGET_H, TARGET_W, 3), dtype=np.uint8))
+            caps[i] = open_cap(url)
             last_ok[i] = False
+
+            # 「No Connection」と中央に表示した黒いフレームを作成
+            black_frame = np.zeros((TARGET_H, TARGET_W, 3), dtype=np.uint8)
+            text = "No Connection"
+            font_face = cv2.FONT_HERSHEY_SIMPLEX
+            font_scale = 0.7
+            font_thickness = 2
+            text_size = cv2.getTextSize(text, font_face, font_scale, font_thickness)[0]
+            text_x = (TARGET_W - text_size[0]) // 2
+            text_y = (TARGET_H + text_size[1]) // 2
+            cv2.putText(black_frame, text, (text_x, text_y), font_face, font_scale, (255, 255, 255), font_thickness, cv2.LINE_AA)
+            frames.append(black_frame)
             continue
         last_ok[i] = True
         frame = cv2.resize(frame, (TARGET_W, TARGET_H))
@@ -63,8 +75,8 @@ while True:
         frame = cv2.bilateralFilter(frame, d=5, sigmaColor=50, sigmaSpace=50)
 
         # ステータス表示
-        status = "OK" if last_ok[i] else "RECONNECT"
-        cv2.putText(frame, f"Cam{i+1} {status}", (10, 24),
+        status = "OK" # 接続成功時は常に"OK"
+        cv2.putText(frame, f"{name} {status}", (10, 24),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255,255,255), 2, cv2.LINE_AA)
         frames.append(frame)
 
