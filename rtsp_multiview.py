@@ -7,9 +7,9 @@ os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp|stimeout;50000
 
 # 表示したい名前とURLを辞書形式で対応させる
 STREAMS = {
-    "PiCam 2 (210)": "rtsp://100.121.246.91:8554/stream",
-    "PiCam 3 (208)": "rtsp://100.125.68.79:8554/stream",  # 2台目のIPアドレス
-    "PiCam 4 (1F)": "rtsp://100.108.196.44:8554/stream",     # 3台目のIPアドレス
+    "PiCam 2 (210)": "rtsp://100.64.0.10:8554/stream",
+    "PiCam 3 (208)": "rtsp://100.64.0.14:8554/stream",  # 2台目のIPアドレス
+    "PiCam 4 (1F)": "rtsp://100.64.0.15:8554/stream",     # 3台目のIPアドレス
 }
 
 TARGET_W, TARGET_H = 640, 360   # 各映像の表示サイズ（軽量）
