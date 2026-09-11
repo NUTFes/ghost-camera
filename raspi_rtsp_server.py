@@ -4,7 +4,7 @@ gi.require_version("Gst", "1.0")
 gi.require_version("GstRtspServer", "1.0")
 from gi.repository import Gst, GObject, GstRtspServer
 
-Gst.init(None)
+Gst.init([])
 
 class RTSPFactory(GstRtspServer.RTSPMediaFactory):
     def __init__(self, use_picam=True):
@@ -14,13 +14,16 @@ class RTSPFactory(GstRtspServer.RTSPMediaFactory):
 
     def do_create_element(self, url):
         DEVICE = "/dev/video0"
-        WIDTH, HEIGHT, FPS = 640, 480, 15  # 混雑対策
+        WIDTH, HEIGHT= 640, 480  # 混雑対策
+        CAMERA_FPS=120
+        OUTPUT_FPS=15
         BITRATE_KBPS = 1500                 # 1.5Mbps目安
 
         pipeline = (
             f"v4l2src device={DEVICE} ! "
-            f"image/jpeg,width={WIDTH},height={HEIGHT},framerate={FPS}/1 ! "
+            f"image/jpeg,width={WIDTH},height={HEIGHT} ! "
             f"jpegdec ! videoconvert ! "
+            f"videorate ! video/x-raw,framerate={OUTPUT_FPS}/1 ! "
             f"x264enc tune=zerolatency speed-preset=ultrafast bitrate={BITRATE_KBPS} ! "
             f"video/x-h264,profile=baseline ! "
             f"h264parse config-interval=1 ! rtph264pay name=pay0 pt=96"
