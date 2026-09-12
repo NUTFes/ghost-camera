@@ -14,20 +14,28 @@ class RTSPFactory(GstRtspServer.RTSPMediaFactory):
 
     def do_create_element(self, url):
         DEVICE = "/dev/video0"
-        WIDTH, HEIGHT= 640, 480  # 混雑対策
-        CAMERA_FPS=120
-        OUTPUT_FPS=15
-        BITRATE_KBPS = 1500                 # 1.5Mbps目安
+        WIDTH, HEIGHT = 640, 480
+        # MJPEGの640x480は約120.101fpsしか列挙されないため、
+        # 約120fps取り込み -> jpegdec -> videorateで15fpsに間引き、という
+        # 無駄の多い構成になっていた。2台同時接続時の遅延の主因。
+        # YUYV(YUY2) 640x480@30fps はこのカメラで正常動作するので、
+        # 最初から30fpsで取り込んでJPEGデコードを省く。
+        CAMERA_FPS = 30
+        OUTPUT_FPS = 15
+        BITRATE_KBPS = 1200
 
         pipeline = (
             f"v4l2src device={DEVICE} ! "
-            f"image/jpeg,width={WIDTH},height={HEIGHT} ! "
-            f"jpegdec ! videoconvert ! "
+            f"video/x-raw,format=YUY2,width={WIDTH},height={HEIGHT},framerate={CAMERA_FPS}/1 ! "
+            f"videoconvert ! "
             f"videorate ! video/x-raw,framerate={OUTPUT_FPS}/1 ! "
-            f"x264enc tune=zerolatency speed-preset=ultrafast bitrate={BITRATE_KBPS} ! "
+            f"x264enc tune=zerolatency speed-preset=ultrafast "
+            f"bitrate={BITRATE_KBPS} key-int-max={OUTPUT_FPS} ! "
             f"video/x-h264,profile=baseline ! "
-            f"h264parse config-interval=1 ! rtph264pay name=pay0 pt=96"
+            f"h264parse config-interval=1 ! "
+            f"rtph264pay name=pay0 pt=96 config-interval=1"
         )
+        print("Pipeline:", pipeline)
         return Gst.parse_launch(pipeline)
 
 def main():

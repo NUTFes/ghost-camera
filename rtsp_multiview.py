@@ -14,6 +14,19 @@ STREAMS = {
 
 TARGET_W, TARGET_H = 640, 360   # 各映像の表示サイズ（軽量）
 
+# === 暗所補正のON/OFF ===
+# 複数台を同時表示すると 15fps × 台数 ぶんの後処理が走るため、
+# 重い処理から順に切っていけるようにフラグ化している。
+# 遅延が出る場合は ENABLE_BILATERAL -> ENABLE_CLAHE の順にFalseにする。
+ENABLE_GAMMA = True
+ENABLE_CLAHE = True
+ENABLE_BILATERAL = False   # bilateralFilterは重いのでデフォルトOFF
+
+# ガンマ補正用LUTとCLAHEはフレームごとに作り直す必要がないので事前に生成
+GAMMA = 1.8
+GAMMA_LUT = np.uint8(((np.arange(256) / 255.0) ** (1.0 / GAMMA)) * 255)
+CLAHE = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+
 def open_cap(url):
     cap = cv2.VideoCapture(url, cv2.CAP_FFMPEG)
     cap.set(cv2.CAP_PROP_BUFFERSIZE, 2)
@@ -56,23 +69,21 @@ while True:
 
         # 2) ガンマ補正（暗部を持ち上げる）
         #    gamma>1 で暗部が見えやすくなる（2.0前後から調整）
-        gamma = 1.8
-        inv = 1.0 / gamma
-        table = (np.arange(256) / 255.0) ** inv
-        table = np.uint8(table * 255)
-        frame = cv2.LUT(frame, table)
-        
-        # 3) CLAHE（適応ヒストグラム平坦化）
-        lab = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)
-        L, A, B = cv2.split(lab)
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
-        L_eq = clahe.apply(L)
-        frame = cv2.merge([L_eq, A, B])
-        frame = cv2.cvtColor(frame, cv2.COLOR_LAB2BGR)
+        if ENABLE_GAMMA:
+            frame = cv2.LUT(frame, GAMMA_LUT)
 
+        # 3) CLAHE（適応ヒストグラム平坦化）
+        if ENABLE_CLAHE:
+            lab = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)
+            L, A, B = cv2.split(lab)
+            L_eq = CLAHE.apply(L)
+            frame = cv2.merge([L_eq, A, B])
+            frame = cv2.cvtColor(frame, cv2.COLOR_LAB2BGR)
 
         # 4) 軽いノイズ低減（暗所で乗るザラつき対策）
-        frame = cv2.bilateralFilter(frame, d=5, sigmaColor=50, sigmaSpace=50)
+        #    比較的重い処理なので、複数台同時表示では既定でOFF
+        if ENABLE_BILATERAL:
+            frame = cv2.bilateralFilter(frame, d=5, sigmaColor=50, sigmaSpace=50)
 
         # ステータス表示
         status = "OK" # 接続成功時は常に"OK"
