@@ -50,9 +50,13 @@ sudo apt install -y htop
 
 ---
 
-## 3. 手順 1：Tailscale を起動して疎通確認
+## 3. 手順 1：Tailscale の接続確認
 
 **Pi 側・ノート PC 側の両方**で実施する。
+
+**一度セットアップした機材は、電源を入れれば Tailscale に自動で接続される。**
+そのため 2 回目以降は 3-3 の確認だけで済むことがほとんどで、`tailscale up` を打つ必要はない。
+3-1・3-2 は初回セットアップ時、3-4 は繋がっていなかったときだけ実施する。
 
 ### 3-1. Tailscale が入っているか確認
 
@@ -75,7 +79,18 @@ systemctl status tailscaled --no-pager
 
 `active (running)` になっていること。`enable` を付けているので次回以降は自動起動する。
 
-### 3-3. ログイン・接続する
+### 3-3. 接続状態を確認する（通常はここだけでよい）
+
+```bash
+tailscale status
+```
+
+- 自分と、3 台の Pi・ノート PC が一覧に出ていれば **接続済み**。そのまま 3-5 へ進む
+- `Logged out.` と出る、または一覧に出てこない機材がある場合だけ 3-4 に進む
+
+### 3-4. 繋がっていないときだけログインする
+
+3-3 で接続できていなかった場合のみ実行する。
 
 ```bash
 sudo tailscale up
@@ -84,9 +99,9 @@ sudo tailscale up
 初回はブラウザでの認証 URL が表示されるので、ブラウザで開いてログインする。
 Pi をヘッドレスで使っている場合は、表示された URL を手元の PC のブラウザに貼り付ける。
 
-2 回目以降は認証済みなので、このコマンドだけで接続状態になる。
+一度認証すれば、以降は電源投入時に自動で接続される。
 
-### 3-4. 自分の Tailscale IP を控える
+### 3-5. 自分の Tailscale IP を控える
 
 **各 Pi で実行し、IP をメモする。** あとでノート PC 側の設定に書く。
 
@@ -95,14 +110,6 @@ tailscale ip -4
 ```
 
 `100.64.x.x` の形式で表示される。
-
-### 3-5. 全機材が見えているか確認
-
-```bash
-tailscale status
-```
-
-3 台の Pi とノート PC が一覧に出ること。出ていない機材は、その機材で `sudo tailscale up` が済んでいない。
 
 ### 3-6. ノート PC から Pi へ疎通確認
 
@@ -114,10 +121,43 @@ ping -c 3 <PiのTailscale IP>
 
 | 症状 | 対処 |
 |---|---|
+| `can't change --login-server without --force-reauth` と出る | **すでに接続できている**ので、多くの場合は対処不要。下の補足を参照 |
 | `tailscale status` に出てこない | その機材で `sudo tailscale up` を実行する |
 | `Logged out.` と出る | `sudo tailscale up` で再ログインする |
 | ping が通らない | 両方が同じ Tailscale アカウント（tailnet）か確認する |
 | eduroam に繋がっていない | 先に Wi-Fi 接続を確認する（Tailscale は別ネットワーク経由でも動く） |
+
+#### 補足：`can't change --login-server without --force-reauth`
+
+`sudo tailscale up` を実行したときに出ることがある。これは次の 3 つが同時に成立したときだけ出る安全装置。
+
+1. 保存済みの接続先（ControlURL）と、コマンドが要求する接続先が違う
+   （`--login-server` は省略すると既定値 `https://controlplane.tailscale.com` になる）
+2. **tailscaled がすでに `Running` 状態、つまりログイン済みで接続できている**
+3. `--force-reauth` が付いていない
+
+つまり「今すでに繋がっているのに、黙って別のコントロールサーバへ乗り換えようとしたので止めた」という意味であり、
+**接続できていないという意味ではない**。
+
+まず `tailscale status` を確認し、目的の機材が一覧に出ていれば**何もせずそのまま 3-5 へ進んでよい**。
+
+どうしても接続先を変える必要がある場合のみ、次のいずれかを実行する。
+
+```bash
+# 今と同じコントロールサーバを使い続ける場合
+sudo tailscale debug prefs | grep -i controlurl   # 現在のURLを確認し
+sudo tailscale up --login-server <確認したURL>     # それを明示して実行する
+```
+
+```bash
+# 標準の Tailscale に移す場合
+sudo tailscale logout
+sudo tailscale up
+```
+
+> **注意：** `logout` や `--force-reauth` を実行すると Tailscale の接続が切れる。
+> Pi に **Tailscale 経由で SSH している場合、その場でセッションが切断される**ので、
+> 直結のキーボード・モニタか、eduroam などの通常の LAN 経由で実行すること。
 
 ---
 
