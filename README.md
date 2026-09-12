@@ -36,6 +36,53 @@ python3 raspi_rtsp_server.py
 python3 rtsp_multiview.py
 ```
 
+ウィンドウが開いたら `ESC` キーで終了する。
+
+## 動作確認
+
+Tailscaleの起動から複数台同時表示までの確認手順は [docs/verification.md](docs/verification.md) にまとめてある。
+機材を動かすとき・トラブルシュートするときはそちらを参照すること。
+
+## 構成
+
+```
+[ラズパイ] USBカメラ -> GStreamer(H.264) -> RTSPサーバ :8554/stream
+                                              |
+                                    Tailscale (100.64.x.x)
+                                              |
+[ノートPC] rtsp_multiview.py -> カメラごとに受信スレッド -> 横並び表示
+```
+
+- 配信は **640x480 / 15fps / H.264**（カメラからはYUYV 640x480 30fpsで取り込む）
+- 1台のラズパイに複数のPCから同時接続できる（`set_shared(True)`）
+- ノートPC側はカメラごとに受信スレッドを分けているため、1台が切断しても他の表示は止まらない
+- 切断されたカメラは `No Connection` と表示し、自動で再接続を試み続ける
+
+## 主な設定項目
+
+### ラズパイ側：`raspi_rtsp_server.py` の `do_create_element()`
+
+| 変数 | 既定値 | 説明 |
+|---|---|---|
+| `DEVICE` | `/dev/video0` | カメラのデバイス。`/dev/video1` では映像が取れない |
+| `WIDTH, HEIGHT` | `640, 480` | 取り込み解像度 |
+| `CAMERA_FPS` | `30` | カメラからの取り込みfps。カメラが対応する値にすること |
+| `OUTPUT_FPS` | `15` | 配信するfps。下げるとさらに軽くなる |
+| `BITRATE_KBPS` | `1200` | H.264のビットレート |
+
+### ノートPC側：`rtsp_multiview.py` の先頭
+
+| 変数 | 既定値 | 説明 |
+|---|---|---|
+| `STREAMS` | 3台 | 表示するカメラの名前とRTSP URL。台数を変えるときはここを増減する |
+| `TARGET_W, TARGET_H` | `640, 360` | 1台あたりの表示サイズ |
+| `ENABLE_GAMMA` | `True` | ガンマ補正（暗部を持ち上げる）。軽い |
+| `ENABLE_CLAHE` | `True` | 適応ヒストグラム平坦化。そこそこ重い |
+| `ENABLE_BILATERAL` | `False` | ノイズ低減。重いので既定でOFF |
+
+暗所補正は 15fps × 台数ぶん走るため、遅いときは重い方から順に切る
+（`ENABLE_BILATERAL` → `ENABLE_CLAHE` の順）。
+
 
 本プロジェクトは技大祭のお化け屋敷で使用する監視カメラシステムを作成するものである．以下にセットアップ手順を示す
 
